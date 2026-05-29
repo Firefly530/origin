@@ -1,0 +1,23 @@
+{
+  "name": "what-a-life",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Self-growth game NPC chat demo",
+  "main": "server.js",
+  "scripts": {
+    "dev": "nodemon server.js",
+    "start": "node server.js",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.0",
+    "bcryptjs": "^3.0.3",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.3",
+    "prisma": "^6.19.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}

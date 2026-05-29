@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>What a Life · 成长控制台</title>
+    <link rel="stylesheet" href="./theme.css" />
+  </head>
+  <body>
+    <div id="authGate" class="auth-gate">
+      <div class="auth-card">
+        <div class="auth-brand">🎮 What a Life</div>
+        <p class="auth-sub" id="authModeTitle">登录后开启你的成长局</p>
+        <div id="authFeedback" class="auth-feedback" style="display: none" role="status"></div>
+
+        <div id="loginPanel">
+          <label class="auth-label" for="loginUsername">用户名</label>
+          <input id="loginUsername" class="auth-input" autocomplete="username" />
+          <label class="auth-label" for="loginPassword">密码</label>
+          <input id="loginPassword" type="password" class="auth-input" autocomplete="current-password" />
+          <button type="button" class="btn btn-primary auth-submit" id="loginBtn">登录</button>
+          <p class="auth-switch">
+            <button type="button" class="btn-link" id="showRegisterBtn">没有账号？注册</button>
+          </p>
+        </div>
+
+        <div id="registerPanel" style="display: none">
+          <label class="auth-label" for="regUsername">用户名</label>
+          <input id="regUsername" class="auth-input" autocomplete="off" />
+          <label class="auth-label" for="regDisplayName">显示名（可选）</label>
+          <input id="regDisplayName" class="auth-input" autocomplete="name" />
+          <label class="auth-label" for="regPassword">密码</label>
+          <input id="regPassword" type="password" class="auth-input" autocomplete="new-password" />
+          <label class="auth-label" for="regPassword2">确认密码</label>
+          <input id="regPassword2" type="password" class="auth-input" autocomplete="new-password" />
+          <label class="auth-label" for="regDailyYuan">日可支配预算 · 元（可选，默认 250）</label>
+          <input id="regDailyYuan" class="auth-input" type="number" min="1" max="5000" step="1" placeholder="250" />
+          <button type="button" class="btn btn-primary auth-submit" id="registerBtn">注册并登录</button>
+          <p class="auth-switch">
+            <button type="button" class="btn-link" id="showLoginBtn">已有账号？去登录</button>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div id="mainApp" class="main-app" style="display: none">
+      <div class="app-shell">
+        <header class="top-bar">
+          <div class="brand">
+            <div class="brand-mascot" aria-hidden="true">🎮</div>
+            <div>
+              <h1>What a Life</h1>
+              <p class="tagline dev-only">把自律玩成一局有奖励、有职业、有复盘的人生角色扮演</p>
+              <p class="tagline player-only">今天也是升级自己的一天——做任务、攒币、换奖励！</p>
+            </div>
+          </div>
+          <div class="key-row" style="flex-wrap: wrap; width: 100%">
+            <span id="whoami" class="small" style="width: 100%; margin-bottom: 6px"></span>
+            <input id="apiKey" type="password" placeholder="API 密钥（OpenAI / DeepSeek / 通义 / Gemini 等 · 仅存本机）" style="min-width: 200px; flex: 1" />
+            <select id="role" aria-label="对话角色"></select>
+            <button type="button" class="btn btn-primary" id="saveKeyBtn">保存设置</button>
+            <span id="keySaveStatus" class="key-save-status" role="status" aria-live="polite"></span>
+            <button type="button" class="btn btn-ghost" id="logoutBtn">退出登录</button>
+          </div>
+          <div class="key-row llm-picker-row" style="flex-wrap: wrap; width: 100%; gap: 8px; align-items: center; margin-top: 6px">
+            <span class="small" style="white-space: nowrap">大模型</span>
+            <select id="aiProvider" aria-label="大模型厂商" style="min-width: 10rem">
+              <option value="deepseek">DeepSeek</option>
+              <option value="openai">OpenAI</option>
+              <option value="qwen">通义千问（OpenAI 兼容）</option>
+              <option value="moonshot">Moonshot（Kimi）</option>
+              <option value="gemini">Google Gemini</option>
+              <option value="custom">自定义兼容端点</option>
+            </select>
+            <input
+              id="aiCustomBase"
+              type="text"
+              placeholder="自定义时填写根路径，如 https://api.example.com/v1"
+              style="flex: 1; min-width: 12rem; display: none"
+              autocomplete="off"
+            />
+            <input id="aiModel" type="text" placeholder="可选：模型名" style="width: 9rem" autocomplete="off" title="如 deepseek-chat、gpt-4o-mini、qwen3.6-plus、gemini-1.5-flash" />
+          </div>
+        </header>
+
+        <section class="card span-12 root-only" id="adminCard" style="margin-bottom: 18px">
+          <div class="card-head">
+            <span class="card-icon" aria-hidden="true">👑</span>
+            <h2 class="card-title">用户管理（仅 root）</h2>
+          </div>
+          <p class="small">新建用户角色可选「玩家」或「开发人员」；留空密码则使用系统默认密码。</p>
+          <div id="adminNotice" class="admin-notice" style="display: none" role="status"></div>
+          <div class="row" style="flex-wrap: wrap; gap: 8px; margin-bottom: 12px">
+            <input id="newUserLogin" placeholder="用户名" style="flex: 1; min-width: 120px" />
+            <input id="newUserDisplay" placeholder="显示名" style="flex: 1; min-width: 120px" />
+            <select id="newUserRole">
+              <option value="player">玩家</option>
+              <option value="developer">开发人员</option>
+            </select>
+            <input id="newUserPassword" type="password" placeholder="密码（可选）" style="flex: 1; min-width: 140px" />
+            <button type="button" class="btn btn-primary" id="createUserBtn">创建用户</button>
+          </div>
+          <div id="adminUsersData" class="admin-users small"></div>
+        </section>
+
+        <section class="hud" id="hudStrip" aria-live="polite">
+          <div class="hud-pill coins">
+            <div class="label">钱包</div>
+            <div class="value" id="hudCoins">—</div>
+          </div>
+          <div class="hud-pill tasks">
+            <div class="label">工作量</div>
+            <div class="value" id="hudTasks">—</div>
+          </div>
+          <div class="hud-pill">
+            <div class="label">本周职业</div>
+            <div class="value" id="hudRole" style="font-size: 1rem">—</div>
+          </div>
+          <div class="hud-pill">
+            <div class="label">主线阶段</div>
+            <div class="value" id="hudPhase" style="font-size: 1rem">—</div>
+          </div>
+          <div class="hud-pill">
+            <div class="label">日预算</div>
+            <div class="value" id="hudBudget" style="font-size: 1rem">—</div>
+          </div>
+          <div class="hud-pill">
+            <div class="label">进行中的影响</div>
+            <div class="value" id="hudCons">—</div>
+          </div>
+        </section>
+
+        <div class="row" style="margin-bottom: 18px; flex-wrap: wrap; gap: 8px; align-items: center">
+          <button type="button" class="btn btn-primary" id="refreshAllBtn">🔄 刷新全部</button>
+          <span id="refreshAllStatus" class="small" role="status" aria-live="polite" style="min-height: 1.2em; opacity: 0.9"></span>
+          <span class="dev-only">
+            <button type="button" class="btn btn-ghost" id="evalConsequenceBtn">⚡ 评估今日影响</button>
+          </span>
+        </div>
+
+        <div class="grid-main">
+          <section class="card span-4">
+            <div class="card-head">
+              <span class="card-icon" aria-hidden="true">🎯</span>
+              <h2 class="card-title">今日任务</h2>
+            </div>
+            <p class="hint dev-only">
+              按周职业与主线阶段自动生成<strong>主线必做</strong>；每条主线可点「详情」查看做法与意义。系统会<strong>基于你选的缺点，在主线匹配里安排至少一条针对性改善</strong>。同一自然日不会重复下发同一条模板任务。「安排今日任务」在已有未完成任务时会删除未完成并补足难度点，已完成任务保留。系统<strong>不再下发选做模板</strong>；其它做过的事请在下方自填，由 API 估难度后计入今日进度。
+            </p>
+            <p class="hint player-only">
+              点「安排今日任务」生成<strong>主线</strong>；列表<strong>仅显示待完成主线</strong>。主线可点「详情」看怎么做、为什么重要。其它你做过的事在下方用文字写下，提交后会估难度并<strong>加入今日难度点进度</strong>（还给一点代币）。
+            </p>
+            <div class="row" style="flex-wrap: wrap; gap: 8px; align-items: center">
+              <button type="button" class="btn btn-primary" id="refreshTodayTasksBtn">📋 安排今日任务</button>
+            </div>
+            <div class="workload-bar-wrap" id="workloadBarWrap" style="display: none">
+              <div class="workload-bar-meta small" id="workloadBarMeta"></div>
+              <div class="workload-bar-outer" aria-hidden="true">
+                <div class="workload-bar-inner" id="workloadBarInner" style="width: 0%"></div>
+              </div>
+            </div>
+            <div class="row workload-tools" style="flex-wrap: wrap; gap: 8px; align-items: center">
+              <label class="small" for="playerWorkloadInput">目标难度点</label>
+              <input id="playerWorkloadInput" type="number" min="6" max="22" style="width: 72px" />
+              <button type="button" class="btn btn-ghost" id="saveWorkloadBtn">保存</button>
+            </div>
+            <div class="row dev-only">
+              <input id="newTaskTitle" placeholder="手动加一条必做…" style="flex: 1; min-width: 140px" />
+              <input type="hidden" id="newTaskSourceType" value="mandatory" />
+              <input id="newTaskReward" type="number" placeholder="代币" style="width: 90px" />
+              <button type="button" class="btn btn-primary" id="addTaskBtn">＋</button>
+            </div>
+            <div class="self-activity-box" style="margin-top: 12px">
+              <label class="small" for="selfActivityDesc" style="display: block; font-weight: 600">今日另做的实事</label>
+              <textarea id="selfActivityDesc" placeholder="例如：整理了书桌并复习了昨天错题 20 分钟…（至少 8 个字）"></textarea>
+              <div class="row" style="flex-wrap: wrap; gap: 8px; margin-top: 8px; align-items: center">
+                <button type="button" class="btn btn-primary" id="submitSelfActivityBtn">提交并评估难度</button>
+                <span id="selfActivityHint" class="small" role="status" style="opacity: 0.9"></span>
+              </div>
+            </div>
+            <div id="tasksData" class="task-list"></div>
+            <dialog id="taskDetailDialog" class="task-detail-dialog">
+              <form method="dialog" style="margin: 0 0 8px; display: flex; justify-content: flex-end">
+                <button type="submit" class="btn btn-ghost">关闭</button>
+              </form>
+              <div id="taskDetailTitle" style="font-weight: 700; font-size: 1.05rem; margin-bottom: 6px"></div>
+              <div id="taskDetailMeta" class="small" style="opacity: 0.88; margin-bottom: 8px"></div>
+              <div id="taskDetailBody" class="task-detail-body"></div>
+            </dialog>
+          </section>
+
+          <section class="card span-4">
+            <div class="card-head">
+              <span class="card-icon" aria-hidden="true">🎁</span>
+              <h2 class="card-title">今日奖励记录</h2>
+            </div>
+            <p class="hint dev-only">无 AI：玩家手写奖励说明与真实花费；代币按「占日预算」比例梯度扣除。root 可维护下方旧版目录（兼容 /redeem）。</p>
+            <p class="hint player-only">
+              先保存<strong>日可支配</strong>；再记录你给自己的奖励和<strong>对应金额（元）</strong>。系统按该笔占日预算的比例<strong>梯度扣代币</strong>；同日累计金额不可超过日预算。
+            </p>
+            <div class="row wallet-tools" style="flex-wrap: wrap; gap: 8px; margin-bottom: 10px">
+              <label class="small" for="playerDailyYuan">日可支配 · 元</label>
+              <input id="playerDailyYuan" type="number" min="1" max="5000" style="width: 88px" />
+              <button type="button" class="btn btn-ghost" id="saveDailyBudgetBtn">保存预算</button>
+            </div>
+            <div class="row" style="flex-wrap: wrap; gap: 8px; margin-bottom: 10px; align-items: center">
+              <input id="selfRewardTitle" placeholder="奖励说明，如 下午茶" style="flex: 1; min-width: 140px" />
+              <input id="selfRewardAmountYuan" type="number" step="0.01" min="0.01" placeholder="元" style="width: 88px" />
+              <input id="selfRewardNote" placeholder="备注（可选）" style="flex: 1; min-width: 100px" />
+              <button type="button" class="btn btn-primary" id="addSelfRewardBtn">记录并扣代币</button>
+            </div>
+            <p id="selfRewardHint" class="small" style="margin-bottom: 8px; min-height: 1.2em; opacity: 0.88" role="status"></p>
+            <div id="selfRewardsList" class="small"></div>
+            <div class="row root-only" style="margin-top: 14px; flex-wrap: wrap; gap: 8px; align-items: center">
+              <span class="small" style="opacity: 0.85">旧版目录（可选）</span>
+              <input id="newRewardTitle" placeholder="奖励名" style="flex: 1; min-width: 120px" />
+              <select id="newRewardTier">
+                <option value="S">S</option>
+                <option value="A">A</option>
+                <option value="B">B</option>
+                <option value="C">C</option>
+                <option value="X">X</option>
+              </select>
+              <input id="newRewardCoinCost" type="number" placeholder="代币" style="width: 72px" />
+              <input id="newRewardBudgetCost" type="number" placeholder="预算分" style="width: 72px" />
+              <button type="button" class="btn btn-primary" id="addRewardBtn">＋</button>
+            </div>
+            <div id="rewardsData" class="small root-only" style="margin-top: 8px"></div>
+            <div
+              class="row"
+              style="flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; border-top: 1px solid var(--card-border); padding-top: 12px"
+            >
+              <span class="small" style="opacity: 0.88">清空任务、代币、兑换、奖励与宠物进度等（保留账号与预算设置）</span>
+              <input
+                id="resetProgressConfirm"
+                type="text"
+                placeholder="输入「我确认重置」"
+                autocomplete="off"
+                style="
+                  flex: 1;
+                  min-width: 140px;
+                  max-width: 220px;
+                  padding: 8px 10px;
+                  border-radius: 10px;
+                  border: 1px solid var(--card-border);
+                  background: rgba(0, 0, 0, 0.25);
+                  color: inherit;
+                "
+              />
+              <button type="button" class="btn btn-danger" id="resetProgressBtn">重置局内进度</button>
+            </div>
+          </section>
+
+          <section class="card span-4" id="petSection">
+            <div class="card-head">
+              <span class="card-icon" aria-hidden="true">🐾</span>
+              <h2 class="card-title">宠物伙伴</h2>
+            </div>
+            <p class="hint player-only">
+              用代币买用品：有单项加成，也有「豪华餐」「洗护套装」等<strong>多属性一起涨</strong>的选项。使用<strong>训练木桩</strong>会弄脏（清洁下降），并有概率练过头略伤健康。随机 debuff（生病、受凉、寄生虫等）用对应用品化解；生病若<strong>7 天</strong>内不用药剂，智力可能<strong>永久</strong>降低。生病与训练副作用会写入<strong>今日日志</strong>，顶部也会红条提示。
+            </p>
+            <p class="hint dev-only">宠物 debuff 按「期望间隔天数」做每日独立随机（几何分布感），非固定周期。</p>
+            <div id="petPanel" class="small">加载中…</div>
+          </section>
+
+          <section class="card span-4">
+            <div class="card-head">
+              <span class="card-icon" aria-hidden="true">🧙</span>
+              <h2 class="card-title">周职业 &amp; 缺点焦点</h2>
+            </div>
+            <p class="hint dev-only">
+              最多 2 个缺点标签，用于<strong>基于缺点在主线匹配中进行针对性改善</strong>（如：拖延、分心）。
+            </p>
+            <p class="hint player-only">选个职业人设，再挑两个你想攻克的小毛病～</p>
+            <div class="row">
+              <select id="weeklyRole" style="flex: 1; min-width: 140px"></select>
+              <input id="weekKey" placeholder="周标识（年‑周次），如 2026‑W18" style="flex: 1" />
+            </div>
+            <div class="row">
+              <input id="defectTag1" placeholder="缺点 1，如 拖延" style="flex: 1" />
+              <input id="defectTag2" placeholder="缺点 2，如 分心" style="flex: 1" />
+            </div>
+            <p class="hint small" style="margin-top: 8px; opacity: 0.92">
+              保存周计划后，你的<strong>现实身份</strong>会与所选职业自动同步，供 NPC 对谈语境使用，无需单独设置。
+            </p>
+            <div class="row" style="flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px">
+              <button type="button" class="btn btn-primary" id="saveWeeklyRoleBtn">保存周计划</button>
+            </div>
+            <p id="professionSaveHint" class="small" style="margin-top: 8px; min-height: 1.25em; color: #15803d" role="status" aria-live="polite"></p>
+            <div id="professionData" class="small"></div>
+          </section>
+
+          <section class="card span-12" id="weeklyCareerCard">
+            <div class="card-head">
+              <span class="card-icon" aria-hidden="true">🛤️</span>
+              <h2 class="card-title">本周与本月生涯</h2>
+            </div>
+            <p class="hint small">
+              <strong>本周线</strong>：自然周内累计完成的<strong>任务难度点</strong>达到「每日目标工作量 × 7 × 90%」即视为通关；达到 55% / 75% /
+              100% 可领取分档额外代币（完成相关任务后自动入账）。<strong>本月线</strong>：按自然月结算「职称晋升」；仅统计<strong>主线必做</strong>完成所带来的<strong>复杂分（难度²）</strong>，达到门槛才晋升一档，否则该月晋升机会作废。日任务排班会随当前职称阶段<strong>提高模板难度偏好</strong>，避免初阶与终阶接到同一难度谱系。
+            </p>
+            <div id="weeklyCareerBody" class="small">加载中…</div>
+          </section>
+
+          <section class="card span-6">
+            <div class="card-head">
+              <span class="card-icon" aria-hidden="true">🌩️</span>
+              <h2 class="card-title">后果 &amp; 周报</h2>
+            </div>
+            <div id="consequenceData" class="small"></div>
+            <hr class="soft" />
+            <div id="reportData" class="small"></div>
+            <hr class="soft dev-only" />
+            <div class="row dev-only">
+              <input id="reviewWeekKey" placeholder="复盘周" style="flex: 1" />
+              <input id="reviewSummary" placeholder="本周总结" style="flex: 2" />
+              <input id="reviewStrategy" placeholder="下周策略" style="flex: 2" />
+              <button type="button" class="btn btn-primary" id="saveReviewBtn">保存</button>
+            </div>
+            <div class="row dev-only">
+              <input id="queryReviewWeekKey" placeholder="查询周" style="flex: 1" />
+              <button type="button" class="btn btn-ghost" id="loadReviewBtn">加载复盘</button>
+            </div>
+            <div id="reviewRecordData" class="small"></div>
+          </section>
+
+          <section class="card span-6 dev-only">
+            <div class="card-head">
+              <span class="card-icon" aria-hidden="true">📡</span>
+              <h2 class="card-title">同步状态</h2>
+            </div>
+            <div id="syncData" class="small">加载中…</div>
+          </section>
+
+          <section class="card span-12">
+            <div class="card-head">
+              <span class="card-icon" aria-hidden="true">📜</span>
+              <h2 class="card-title">今日日志</h2>
+            </div>
+            <p class="hint small" style="margin-top: 0">
+              已完成的任务与「今日奖励记录」会按时间列在这里；任务区只保留待办。可指定日期查看或让 AI 结合身份与对话做一日总结（需顶栏 API 密钥）。
+            </p>
+            <div class="row" style="flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px">
+              <label class="small" for="dayLogDateInput">日期</label>
+              <input id="dayLogDateInput" type="date" style="padding: 8px 10px; border-radius: 10px; border: 1px solid var(--card-border); background: rgba(0, 0, 0, 0.25); color: inherit" />
+              <button type="button" class="btn btn-ghost" id="refreshDayLogBtn">刷新日志</button>
+              <button type="button" class="btn btn-primary" id="summarizeDayBtn">AI 总结这一天</button>
+            </div>
+            <div id="dayLogBody" class="small"></div>
+            <div id="daySummaryOut" class="small" style="margin-top: 14px; white-space: pre-wrap; line-height: 1.55; padding: 12px; border-radius: 12px; background: rgba(0, 0, 0, 0.22); border: 1px solid var(--card-border); display: none"></div>
+          </section>
+
+          <section class="card span-12">
+            <div class="card-head">
+              <span class="card-icon" aria-hidden="true">💬</span>
+              <h2 class="card-title">角色茶话会</h2>
+            </div>
+            <p class="hint dev-only">选职业 → 发消息；风格会随职业变化。</p>
+            <p class="hint player-only">和 NPC 唠两句，吐槽也行，打气也行 ✨</p>
+            <div class="row dev-only">
+              <button type="button" class="btn btn-ghost" id="loadSessionsBtn">历史会话</button>
+            </div>
+            <div id="sessionsData" class="small dev-only" style="margin-bottom: 8px"></div>
+            <div id="chat"></div>
+            <textarea id="input" placeholder="跟角色说点什么…"></textarea>
+            <div class="row" style="margin-top: 10px">
+              <button type="button" class="btn btn-primary" id="sendBtn">发送</button>
+              <button type="button" class="btn btn-ghost" id="clearBtn">清空</button>
+            </div>
+          </section>
+        </div>
+
+        <div id="error" class="err" role="alert" style="display: none"></div>
+      </div>
+
+      <div id="onboardingOverlay" class="onboarding-overlay" style="display: none" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle">
+        <div class="onboarding-card card">
+          <h2 id="onboardingTitle" class="card-title" style="margin-top: 0">欢迎，先校准你的节奏</h2>
+          <p class="small" style="opacity: 0.9">日可支配预算用于「今日奖励记录」金额上限与代币梯度；工作量目标决定「安排今日任务」时排入的难度点总量。</p>
+          <label class="auth-label" for="onboardDailyYuan">日可支配预算（人民币 · 元）</label>
+          <input id="onboardDailyYuan" class="auth-input" type="number" min="1" max="5000" step="1" value="250" />
+          <label class="auth-label" for="onboardWorkload">今日目标工作量（难度点 6～22）</label>
+          <input id="onboardWorkload" class="auth-input" type="number" min="6" max="22" step="1" value="12" />
+          <label class="auth-label" for="onboardTasks">自选今日任务（每行一条，最多 5 条，可选）</label>
+          <textarea id="onboardTasks" class="auth-input" rows="4" placeholder="例如：喝水 2L&#10;散步 20 分钟"></textarea>
+          <label class="auth-label" for="onboardApiKey">API 密钥（可选，用于估难度；也可使用顶栏已保存的密钥）</label>
+          <input id="onboardApiKey" class="auth-input" type="password" autocomplete="off" placeholder="与 OpenAI 兼容的密钥" />
+          <p id="onboardingErr" class="auth-feedback err" style="display: none"></p>
+          <div class="row" style="margin-top: 12px">
+            <button type="button" class="btn btn-primary" id="onboardingSubmitBtn">完成并进入</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="./main.js"></script>
+  </body>
+</html>

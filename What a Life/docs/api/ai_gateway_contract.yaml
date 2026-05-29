@@ -1,0 +1,144 @@
+openapi: 3.0.3
+info:
+  title: Self Growth Game AI Gateway API
+  version: 1.0.0
+  description: AI NPC chat contract for local-first architecture
+
+servers:
+  - url: http://localhost:3000
+
+paths:
+  /api/v1/chat/npc:
+    post:
+      summary: Chat with NPC role using LLM
+      operationId: chatNpc
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatNpcRequest'
+      responses:
+        '200':
+          description: Successful chat response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatNpcResponse'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid or expired API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Provider unavailable (may include fallback response)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorOrFallbackResponse'
+
+components:
+  schemas:
+    ChatMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant, system]
+        content:
+          type: string
+          minLength: 1
+          maxLength: 4000
+
+    ChatNpcRequest:
+      type: object
+      required: [role, messages]
+      properties:
+        role:
+          type: string
+          enum: [doctor, engineer, coach, researcher]
+        messages:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/ChatMessage'
+        apiKey:
+          type: string
+          description: Local-first mode can pass key directly; must not be logged.
+        apiKeyRef:
+          type: string
+          description: Cloud mode key reference id.
+        userContext:
+          type: object
+          properties:
+            examGoalDate:
+              type: string
+            dailyBudgetCents:
+              type: integer
+            todayTaskCompletionRate:
+              type: number
+            activeConsequences:
+              type: array
+              items:
+                type: string
+
+    ChatNpcResponse:
+      type: object
+      required: [reply, provider, role]
+      properties:
+        reply:
+          type: string
+        role:
+          type: string
+          enum: [doctor, engineer, coach, researcher]
+        provider:
+          type: string
+        model:
+          type: string
+        tokenUsage:
+          type: object
+          properties:
+            promptTokens:
+              type: integer
+            completionTokens:
+              type: integer
+            totalTokens:
+              type: integer
+        latencyMs:
+          type: integer
+        fallbackUsed:
+          type: boolean
+          default: false
+
+    ErrorResponse:
+      type: object
+      required: [errorCode, message]
+      properties:
+        errorCode:
+          type: string
+        message:
+          type: string
+        retriable:
+          type: boolean
+          default: false
+
+    ErrorOrFallbackResponse:
+      oneOf:
+        - $ref: '#/components/schemas/ErrorResponse'
+        - type: object
+          required: [fallbackUsed, reply]
+          properties:
+            fallbackUsed:
+              type: boolean
+              enum: [true]
+            reply:
+              type: string

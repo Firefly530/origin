@@ -1,0 +1,5 @@
+{
+  "watch": ["server.js", "backend", "prisma"],
+  "ext": "js,json,prisma",
+  "ignore": ["public/**", "node_modules", "dev.db"]
+}

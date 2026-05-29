@@ -1,0 +1,462 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String                @id
+  displayName      String
+  /// 登录名（小写存库）；演示账号为 player，管理员为 root
+  loginUsername    String?               @unique
+  passwordHash     String?
+  /// root | player | developer
+  accountRole      String                @default("player")
+  dailyBudgetCents Int                   @default(25000)
+  /// 每日目标「难度点」总量；生成任务与进度条以此为参照
+  dailyWorkloadTarget Int               @default(12)
+  /// pending = 需完成首次引导；done = 已引导
+  onboardingStep   String                @default("done")
+  /// rewardId -> 万分比占用日预算，AI 个性化后写入；未覆盖则用奖励表上的 budgetPercentBps
+  rewardBudgetPercentOverridesJson String @default("{}")
+  /// 用户现实职业/身份（与周 NPC 人设不同），用于对话里 NPC 扮演对立角色（如医生→病人）
+  identityRoleCode String?
+  /// AI 按当前可支配预算重写的奖励文案与比例、代币等 JSON：{ atBudgetCents, items: { id: { title?, budgetPercentBps?, coinCost?, hint? } } }
+  rewardCatalogPersonalizationJson String @default("{}")
+  /// X 档里程碑纪念礼兑换记录，供「收藏馆」展示：[{ rewardId, title, redeemedAt, coinSpent }]
+  milestoneCollectionJson          String @default("[]")
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  goals            Goal[]
+  taskTemplates    TaskTemplate[]
+  budgetGuard      BudgetGuard?
+  tasks            DailyTask[]
+  wallet           Wallet?
+  weeklyPlans      WeeklyProfessionPlan[]
+  redemptions      RedemptionRecord[]
+  chatSessions     ChatSession[]
+  consequences     ConsequenceState[]
+  attributeSnapshots AttributeSnapshot[]
+  eventRecords     EventRecord[]
+  recoveryPlans    RecoveryPlan[]
+  syncEvents       SyncEvent[]
+  weeklyReviews    WeeklyReview[]
+  dailySelfRewards DailySelfReward[]
+  userPet          UserPet?
+  petInventory     PetInventory[]
+  petDebuffs       PetDebuff[]
+  professionCareers UserProfessionCareer[]
+}
+
+/// 宠物培养：四维属性 + 代币购用品；随机 debuff 与药剂时限逻辑见 petService
+model UserPet {
+  userId           String   @id
+  displayName      String   @default("小伙伴")
+  health           Int      @default(78)
+  cleanliness      Int      @default(78)
+  intelligence     Int      @default(62)
+  combatPower      Int      @default(12)
+  /// 上次跑「每日随机事件」的 UTC 日期 YYYY-MM-DD
+  lastEventRollDate String  @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PetInventory {
+  id       String @id
+  userId   String
+  itemCode String
+  quantity Int    @default(0)
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, itemCode])
+  @@index([userId])
+}
+
+/// active = 进行中；cleared = 已处理；penalized = 超时未用药等永久后果已结算
+model PetDebuff {
+  id                   String    @id
+  userId               String
+  code                 String
+  status               String    @default("active")
+  appliedAt            DateTime  @default(now())
+  medicineDeadlineAt   DateTime?
+  metaJson             String    @default("{}")
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([userId, code])
+}
+
+/// 用户自行记录的「今日对自己的奖励」及对应现实金额；代币按占日预算比例梯度扣除
+model DailySelfReward {
+  id               String   @id
+  userId           String
+  logDate          String
+  title            String
+  amountCents      Int
+  /// 占当日可支配预算的万分比（单笔）
+  budgetPercentBps Int
+  coinSpent        Int
+  note             String   @default("")
+  createdAt        DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, logDate])
+}
+
+model Goal {
+  id              String         @id
+  userId          String
+  title           String
+  goalType        String
+  difficulty      Int            @default(1)
+  priority        Int            @default(3)
+  expectedMinutes Int            @default(30)
+  cycleRule       String         @default("daily")
+  defectTagsJson  String         @default("[]")
+  status          String         @default("active")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  templates       TaskTemplate[]
+}
+
+model TaskTemplate {
+  id                   String      @id
+  userId               String
+  goalId               String?
+  professionRoleCode   String?
+  title                String
+  category             String
+  sourceType           String
+  difficulty           Int         @default(1)
+  priority             Int         @default(3)
+  expectedMinutes      Int         @default(30)
+  rewardBaseCoin       Int         @default(60)
+  defectTagsJson       String      @default("[]")
+  qualityWeight        Float       @default(1.0)
+  isMandatoryCandidate Boolean     @default(true)
+  isMainline           Boolean     @default(false)
+  mainlineTrack        String?
+  /// JSON：{ "howTo": "做法说明", "why": "意义说明", "step": 1 }，主线叙事与详情页用
+  detailJson           String      @default("{}")
+  active               Boolean     @default(true)
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+  user                 User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goal                 Goal?       @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  professionRole       ProfessionRole? @relation(fields: [professionRoleCode], references: [code], onDelete: SetNull)
+  dailyTasks           DailyTask[]
+}
+
+model DailyTask {
+  id          String          @id
+  userId      String
+  templateId  String?
+  title       String
+  category    String          @default("habit")
+  sourceType  String
+  status      String
+  difficulty  Int             @default(1)
+  isMainline  Boolean         @default(false)
+  /// 生成时是否与当周 defectFocusTagsJson 有交集（便于展示与验收）
+  targetsWeeklyDefects Boolean @default(false)
+  rewardCoin  Int             @default(0)
+  penaltyCoin Int             @default(0)
+  taskDate    String
+  completedAt DateTime?
+  qualityScore Float          @default(1.0)
+  reflection  String?
+  defectTagsJson String       @default("[]")
+  evidenceJson String         @default("{}")
+  /// 与模板一致的详情快照；自填任务可仅存 { "howTo": "", "why": "", "raw": "用户原文" }
+  detailJson  String          @default("{}")
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  template    TaskTemplate?   @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  logs        CompletionLog[]
+  eventRecords EventRecord[]
+  recoveryPlans RecoveryPlan[]
+
+  /// 同一用户同一天不重复实例化同一模板（templateId 为空的手动任务不受限）
+  @@unique([userId, templateId, taskDate])
+}
+
+model CompletionLog {
+  id          String   @id
+  dailyTaskId String
+  completedAt DateTime @default(now())
+  qualityScore Float   @default(1.0)
+  reflection  String?
+  durationMinutes Int  @default(0)
+  outputText   String?
+  evidenceJson String  @default("{}")
+  dailyTask   DailyTask @relation(fields: [dailyTaskId], references: [id], onDelete: Cascade)
+}
+
+model Wallet {
+  userId       String   @id
+  coinBalance  Int      @default(0)
+  energy       Int      @default(100)
+  reputation   Int      @default(0)
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ProfessionRole {
+  code         String                 @id
+  displayName  String
+  focus        String
+  description  String                 @default("")
+  rewardMultiplierJson String         @default("{}")
+  taskRatioJson String                @default("{}")
+  mainlineBlueprintJson String        @default("{}")
+  active       Boolean                @default(true)
+  weeklyPlans  WeeklyProfessionPlan[]
+  templates    TaskTemplate[]
+  chatSessions ChatSession[]
+  careerNodes  CareerNode[]
+  userProfessionCareers UserProfessionCareer[]
+}
+
+model WeeklyProfessionPlan {
+  id           String   @id
+  userId       String
+  weekKey      String
+  roleCode     String
+  changedCount Int      @default(0)
+  /// intro | execution | expert — 由本周已完成主线必做次数驱动，用于升难与奖励系数
+  mainlinePhase            String   @default("intro")
+  mainlineCompletionsWeek  Int      @default(0)
+  /// 本周最多 2 个重点缺点标签，用于「至少 1 条缺点针对性主线」匹配
+  defectFocusTagsJson      String   @default("[\"拖延\",\"分心\"]")
+  /// JSON：{ "tier55": true, "tier75": true, "tier100": true } 本周生涯档位奖励是否已领取
+  careerBonusClaimedJson  String   @default("{}")
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         ProfessionRole @relation(fields: [roleCode], references: [code])
+
+  @@unique([userId, weekKey, isActive])
+}
+
+model RewardCatalog {
+  id              String   @id
+  rewardType      String   @default("real_world_reward")
+  title           String
+  tier            String
+  coinCost        Int
+  budgetCostCents Int
+  /// 占用户日可支配预算的万分比（如 800 = 8%）；有值时与 dailyBudgetCents 相乘得现实扣减分
+  budgetPercentBps Int?
+  dailyLimit      Int      @default(1)
+  weeklyLimit     Int      @default(7)
+  cooldownMinutes Int      @default(0)
+  enabled         Boolean  @default(true)
+  redemptions     RedemptionRecord[]
+}
+
+model RedemptionRecord {
+  id              String   @id
+  userId          String
+  rewardId        String
+  coinSpent       Int
+  budgetCostCents Int
+  date            String
+  status          String   @default("success")
+  redeemedAt      DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reward          RewardCatalog @relation(fields: [rewardId], references: [id])
+}
+
+model BudgetGuard {
+  userId                  String   @id
+  dailyBudgetCents        Int      @default(25000)
+  tierDailyLimitJson      String   @default("{\"S\":3,\"A\":2,\"B\":1,\"C\":1,\"X\":0}")
+  weekendOnlyTierJson     String   @default("[\"X\"]")
+  weeklyCompletionForX    Float    @default(0.85)
+  coinPerBudgetUnit       Int      @default(10)
+  mandatoryCoinBoost      Float    @default(1.8)
+  updatedAt               DateTime @updatedAt
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ConsequenceRule {
+  id                   String   @id
+  triggerType          String
+  triggerConditionJson String
+  effectJson           String
+  severity             Int      @default(1)
+  priority             Int      @default(100)
+  enabled              Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  states               ConsequenceState[]
+  recoveryPlans        RecoveryPlan[]
+}
+
+model ConsequenceState {
+  id              String   @id
+  userId          String
+  ruleId          String?
+  type            String
+  effect          String
+  penaltyCoinRate Float
+  stateStatus     String   @default("active")
+  startedAt       DateTime @default(now())
+  expiresAt       DateTime?
+  metadataJson    String   @default("{}")
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rule            ConsequenceRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  recoveryPlans   RecoveryPlan[]
+}
+
+model RecoveryPlan {
+  id                 String   @id
+  userId             String
+  consequenceStateId String?
+  consequenceRuleId  String?
+  dailyTaskId        String?
+  requiredDays       Int      @default(3)
+  progressDays       Int      @default(0)
+  requiredTasksJson  String   @default("[]")
+  status             String   @default("active")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  consequenceState   ConsequenceState? @relation(fields: [consequenceStateId], references: [id], onDelete: SetNull)
+  consequenceRule    ConsequenceRule? @relation(fields: [consequenceRuleId], references: [id], onDelete: SetNull)
+  dailyTask          DailyTask? @relation(fields: [dailyTaskId], references: [id], onDelete: SetNull)
+}
+
+model AttributeSnapshot {
+  id              String   @id
+  userId          String
+  snapshotDate    String
+  discipline      Float    @default(0)
+  execution       Float    @default(0)
+  focus           Float    @default(0)
+  physical        Float    @default(0)
+  emotional       Float    @default(0)
+  professional    Float    @default(0)
+  exp             Int      @default(0)
+  coinBalance     Int      @default(0)
+  energy          Int      @default(100)
+  reputation      Int      @default(0)
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, snapshotDate])
+}
+
+model CareerNode {
+  id                String   @id
+  professionRoleCode String
+  /// 全局等级 1–18，与 (careerStage-1)*6 + tierInStage 一致
+  levelOrder        Int
+  /// 1 探索期 2 进阶期 3 冲刺期
+  careerStage       Int      @default(1)
+  /// 阶段内档位 1–6
+  tierInStage       Int      @default(1)
+  title             String
+  unlockRuleJson    String   @default("{}")
+  rewardJson        String   @default("{}")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  professionRole    ProfessionRole @relation(fields: [professionRoleCode], references: [code], onDelete: Cascade)
+
+  @@index([professionRoleCode, levelOrder])
+}
+
+/// 按职业维度的「月度晋升」进度（与周计划当前 roleCode 对齐）
+model UserProfessionCareer {
+  id                    String   @id
+  userId                String
+  professionRoleCode    String
+  careerStage           Int      @default(1)
+  tierInStage           Int      @default(1)
+  /// 正在累计晋升分的自然月 YYYY-MM（本地机器日历）
+  trackingMonthKey      String   @default("")
+  monthPromotionPoints  Int      @default(0)
+  lastEvaluatedMonthKey String   @default("")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role                  ProfessionRole @relation(fields: [professionRoleCode], references: [code], onDelete: Cascade)
+
+  @@unique([userId, professionRoleCode])
+}
+
+model EventRecord {
+  id              String   @id
+  userId          String
+  dailyTaskId     String?
+  eventType       String
+  direction       String
+  triggerReason   String
+  effectJson      String   @default("{}")
+  triggeredAt     DateTime @default(now())
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dailyTask       DailyTask? @relation(fields: [dailyTaskId], references: [id], onDelete: SetNull)
+}
+
+model ChatSession {
+  id         String        @id
+  userId     String
+  roleCode   String
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       ProfessionRole @relation(fields: [roleCode], references: [code])
+  messages   ChatMessage[]
+}
+
+model ChatMessage {
+  id          String   @id
+  sessionId   String
+  messageRole String
+  content     String
+  latencyMs   Int      @default(0)
+  createdAt   DateTime @default(now())
+  session     ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model SyncEvent {
+  id            String   @id
+  userId        String
+  aggregateType String
+  aggregateId   String
+  operationType String
+  payloadJson   String
+  status        String   @default("pending")
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model WeeklyReview {
+  id          String   @id
+  userId      String
+  weekKey     String
+  summary     String
+  strategy    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekKey])
+}
